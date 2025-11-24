@@ -1,0 +1,19 @@
+#DUNGEON
+
+#setting up GUI
+# root = Tk()
+# root.title("minesweeper")
+# root.geometry(f"{num_rows*50}x{num_cols*50}")
+
+# canvas = Canvas(root, width=num_cols*CELL_SIZE, height=num_rows*CELL_SIZE)
+# canvas.pack()
+
+# for i in range(num_rows):
+#     for j in range(num_cols):
+#         x1 = j * CELL_SIZE
+#         y1 = i * CELL_SIZE
+#         x2 = x1 + CELL_SIZE
+#         y2 = y1 + CELL_SIZE
+
+#         cell = canvas.create_rectangle(x1, y1, x2, y2, fill="lightgrey", outline="black")
+#         canvas.tag_bind(cell, "<Button-1>", lambda e, x=i, y=j: reveal_cell(e, x, y))

@@ -23,6 +23,8 @@ def reveal_cell(position, constraints):
     global num_revealed_cells
     num_revealed_cells += 1
 
+    #print(f"revealed cell: ({c}, {r})")
+
     #joever
     if cur_board[r][c] == -2 or num_revealed_cells == ROWS * COLS - MINES:
         print_board(cur_board, cur_cell)
@@ -63,7 +65,8 @@ def lin_combo(i, j, constraints):
             constraints.append(cp.sum(X) == rhs)
 
 #check for trivial openings around current cell
-def check_minecount(r, c):
+def check_minecount(r,c):
+  
     num_surrounding_mines = cur_board[r][c]
     num_flagged_mines = 0
     for i in range(max(0, r - 1), min(ROWS, r + 2)):
@@ -83,19 +86,33 @@ def collect():
 
 #calculate probabilities
 def calculate_probabilities(probabilities):
+    #KEY:
+    # +1 for each TRUE in sols
+    # no change for each FALSE in sols
+    # set to -1 for NONE in any sol
+    # set to -2 if revealed in cur_board
     for sol in solutions:
         for i in range(ROWS):
             for j in range(COLS):
-                if (probabilities[i][j] == -1):
+                if (probabilities[i][j] < 0):
                     continue
                 if sol[i][j]:
                     probabilities[i][j] += 1
-                elif sol[i][j] == None or cur_board[i][j] not in {-1, -3}:
+                elif sol[i][j] == None:
                     probabilities[i][j] = -1
+                elif cur_board[i][j] not in {-1, -3}:
+                    probabilities[i][j] = -2
+
+    cells_left = ROWS * COLS - num_revealed_cells - num_found_mines
+    mines_left = MINES - num_found_mines
+    minecount_prob = round(mines_left / cells_left,2)
+    print(f"minecount probability: {minecount_prob}; {mines_left} in {cells_left} cells")
     for i in range(ROWS):
         for j in range(COLS):
-            if probabilities[i][j] != -1:
+            if probabilities[i][j] > 0:
                 probabilities[i][j] = round(probabilities[i][j]/len(solutions),2)
+            elif probabilities[i][j] == -1 and i in {0, ROWS - 1} and j in {0, COLS - 1}:
+                probabilities[i][j] = minecount_prob
 
 #decide which cell to reveal next
 def next_cell(probabilities, constraints):
@@ -112,23 +129,33 @@ def next_cell(probabilities, constraints):
     if 1.0 in hashed_probs:
         for cell in hashed_probs[1]:
             r, c = cell
-            cur_board[r][c] = -3
-            #solver.add(all_unknowns[r][c] == 1)
-            constraints.append(all_unknowns[r][c] == 1)
-            #constraints.append(all_unknowns[r][c] == 1)
-            #check trivial openings around flagged mine
-            for i in range(max(0, r - 1), min(ROWS, r + 2)):
-                for j in range(max(0, c - 1), min(COLS, c + 2)):
-                    if cur_board[i][j] not in {-1, -3}:
-                        check_minecount(i, j)
+            if cur_board[r][c] != -3:
+                cur_board[r][c] = -3
+                global num_found_mines
+                num_found_mines += 1
+                #print(f"flagged mine @: ({c}, {r})")
+                constraints.append(all_unknowns[r][c] == 1)
+                #check trivial openings around flagged mine
+                for i in range(max(0, r - 1), min(ROWS, r + 2)):
+                    for j in range(max(0, c - 1), min(COLS, c + 2)):
+                        if cur_board[i][j] not in {-1, -3}:
+                            check_minecount(i, j)
         del hashed_probs[1]
+    
     
     #choose random cell from lowest prob
     decided = False
     while not decided:
         min_prob = min(hashed_probs.keys())
-        if min_prob == -1:
+        #random stragglers
+        if min_prob < 0:
             del hashed_probs[min_prob]
+            continue
+        #open definite safe cells
+        if 0.0 in hashed_probs:
+            for cell in hashed_probs[0.0]:
+                reveal_cell(cell, constraints)
+            del hashed_probs[0.0]
             continue
         cell = rnd.choice(hashed_probs[min_prob])
         decided = True
@@ -159,7 +186,6 @@ def print_board(board, cell):
 # -- PROG START:D -- #
 
 #vars
-#CELL_SIZE = 40
 MINES = 99
 ROWS = 16
 COLS = 30
@@ -167,10 +193,9 @@ answer_board = [[0 for j in range(COLS)] for i in range(ROWS)]
 cur_board = [[-1 for j in range(COLS)] for i in range(ROWS)]
 game_over = False
 num_revealed_cells = 0
-START_ROW = rnd.randint(0, ROWS - 1)
-START_COL = rnd.randint(0, COLS - 1)
+num_found_mines = 0
 
-#KEY
+#KEY FOR BOARDS:
 # 0-8: surrounging mines
 # -1: no info
 # -2: mine
@@ -184,7 +209,7 @@ all_unknowns = cp.boolvar(shape=(ROWS, COLS), name="x")
 for mine in range(MINES):
     r = rnd.randint(0, ROWS - 1)
     c = rnd.randint(0, COLS - 1)
-    while answer_board[r][c] == -2 or (r == START_ROW and c == START_COL):
+    while answer_board[r][c] == -2 or (r == 0 and c == 0):
         r = rnd.randint(0, ROWS - 1)
         c = rnd.randint(0, COLS - 1)
     answer_board[r][c] = -2
@@ -205,18 +230,22 @@ print("ANSWER BOARD:")
 print_board(answer_board, None)
 print("\n\n")
 
-#random first move
-cur_cell = (START_ROW, START_COL)
+#start in top left corner
+cur_cell = (0,0)
 start_time = time.time()
 
 constraints = []
-#solver = cp.SolverLookup.get("pysat", model=None)
+
+#first move
+reveal_cell(cur_cell, constraints)
+print_board(cur_board, cur_cell)
 
 
 while not game_over:
     reveal_cell(cur_cell, constraints)
-
     print_board(cur_board, cur_cell)
+    #check trivial openings around current cell
+    #check_minecount(cur_cell)
 
     print("# revealed:" + str(num_revealed_cells))
     print("left to reveal:" + str(ROWS * COLS - num_revealed_cells - MINES))
@@ -226,34 +255,26 @@ while not game_over:
     solutions = []
 
     model.solveAll(display=collect)
-    #n = model.solveAll(display=collect)
     print(f"stored {len(solutions)} solutions.\n")
 
     probabilities = [[0 for j in range(COLS)] for i in range(ROWS)]
     calculate_probabilities(probabilities)
     print("PROBABILITIES:")
+    for i in range(ROWS):
+        row_str = ""
+        for j in range(COLS):
+            char = "["
+            match probabilities[i][j]:
+                case -2: char += "   "
+                case -1: char += " ? "
+                case 0: char += " 0 "
+                case 1: char += "1.0"
+                case _: char += f".{int(probabilities[i][j]*100)}"
+            row_str += char + "]"
+        print(row_str)
 
     cur_cell = next_cell(probabilities, constraints)
     print(f"CURRENT BOARD: (out of {len(solutions)} solutions; current cell mine probability = {probabilities[cur_cell[0]][cur_cell[1]]}) [time: {round(time.time() - start_time, 2)}s]")
     #print(f"next cell to reveal: ({cur_cell[1]}, {cur_cell[0]})\n\n")
 
 
-#DUNGEON
-
-#setting up GUI
-# root = Tk()
-# root.title("minesweeper")
-# root.geometry(f"{num_rows*50}x{num_cols*50}")
-
-# canvas = Canvas(root, width=num_cols*CELL_SIZE, height=num_rows*CELL_SIZE)
-# canvas.pack()
-
-# for i in range(num_rows):
-#     for j in range(num_cols):
-#         x1 = j * CELL_SIZE
-#         y1 = i * CELL_SIZE
-#         x2 = x1 + CELL_SIZE
-#         y2 = y1 + CELL_SIZE
-
-#         cell = canvas.create_rectangle(x1, y1, x2, y2, fill="lightgrey", outline="black")
-#         canvas.tag_bind(cell, "<Button-1>", lambda e, x=i, y=j: reveal_cell(e, x, y))
