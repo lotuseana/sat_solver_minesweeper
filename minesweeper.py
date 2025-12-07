@@ -259,6 +259,8 @@ while not game_over:
 
     probabilities = [[0 for j in range(COLS)] for i in range(ROWS)]
     calculate_probabilities(probabilities)
+    
+    """"
     print("PROBABILITIES:")
     for i in range(ROWS):
         row_str = ""
@@ -272,6 +274,7 @@ while not game_over:
                 case _: char += f".{int(probabilities[i][j]*100)}"
             row_str += char + "]"
         print(row_str)
+    """
 
     cur_cell = next_cell(probabilities, constraints)
     print(f"CURRENT BOARD: (out of {len(solutions)} solutions; current cell mine probability = {probabilities[cur_cell[0]][cur_cell[1]]}) [time: {round(time.time() - start_time, 2)}s]")
